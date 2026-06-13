@@ -1,0 +1,2203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="color-scheme" content="dark">
+  <title>Custom FFT Frequency Analyzer - Physics IA</title>
+  
+  <!-- Premium Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+
+  <style>
+    /* CSS Variables & Theme Configuration */
+    :root {
+      color-scheme: dark;
+      
+      /* Colors in OKLCH/Hex - Modern harmonious palette */
+      --bg-base: #080c14;
+      --bg-surface: rgba(19, 26, 40, 0.75);
+      --bg-surface-solid: #131a28;
+      --bg-surface-hover: #1e283b;
+      --border-color: rgba(255, 255, 255, 0.08);
+      --border-accent: rgba(0, 245, 255, 0.2);
+      
+      --accent-cyan: #00f5ff;
+      --accent-cyan-glow: rgba(0, 245, 255, 0.4);
+      --accent-orange: #ff6b35;
+      --accent-orange-glow: rgba(255, 107, 53, 0.4);
+      
+      --color-success: #00e676;
+      --color-warning: #ffb300;
+      --color-error: #ff1744;
+      
+      --text-primary: #f3f4f6;
+      --text-secondary: #9ca3af;
+      --text-muted: #6b7280;
+      
+      /* Layout & Spacing */
+      --radius-sm: 6px;
+      --radius-md: 12px;
+      --radius-lg: 16px;
+      --transition-fast: 0.15s ease;
+      --transition-normal: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    /* Reset and Core Layout */
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Outfit', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background-color: var(--bg-base);
+      background-image: 
+        radial-gradient(at 0% 0%, rgba(0, 245, 255, 0.03) 0px, transparent 50%),
+        radial-gradient(at 100% 100%, rgba(255, 107, 53, 0.02) 0px, transparent 50%);
+      color: var(--text-primary);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow-x: hidden;
+    }
+
+    /* Custom scrollbars */
+    :root {
+      scrollbar-color: rgba(255, 255, 255, 0.15) var(--bg-base);
+      scrollbar-width: thin;
+    }
+
+    /* WebKit Scrollbar Fallbacks */
+    @supports not (scrollbar-color: auto) {
+      ::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+      }
+      ::-webkit-scrollbar-track {
+        background: var(--bg-base);
+      }
+      ::-webkit-scrollbar-thumb {
+        background: rgba(255, 255, 255, 0.15);
+        border-radius: var(--radius-sm);
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background: rgba(255, 255, 255, 0.3);
+      }
+    }
+
+    /* Accessibility Focus Rings */
+    *:focus-visible {
+      outline: 2px solid var(--accent-cyan);
+      outline-offset: 4px;
+    }
+
+    /* Header Styling */
+    header {
+      background-color: rgba(8, 12, 20, 0.85);
+      border-bottom: 1px solid var(--border-color);
+      padding: 1.25rem 2rem;
+      backdrop-filter: blur(12px);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .header-title-container h1 {
+      font-size: 1.5rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      background: linear-gradient(135deg, #fff 40%, var(--accent-cyan) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 0.25rem;
+    }
+
+    .header-title-container p {
+      font-size: 0.85rem;
+      color: var(--text-secondary);
+    }
+
+    .status-badge {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      background: rgba(255, 255, 255, 0.04);
+      padding: 0.5rem 0.85rem;
+      border-radius: 9999px;
+      border: 1px solid var(--border-color);
+      font-size: 0.85rem;
+      font-weight: 500;
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background-color: var(--text-muted);
+      box-shadow: 0 0 0 rgba(255, 255, 255, 0.2);
+    }
+
+    .status-badge[data-status="listening"] .status-dot {
+      background-color: var(--accent-cyan);
+      box-shadow: 0 0 8px var(--accent-cyan);
+      animation: pulse-glow 2s infinite;
+    }
+
+    .status-badge[data-status="recording"] .status-dot {
+      background-color: var(--accent-orange);
+      box-shadow: 0 0 8px var(--accent-orange);
+      animation: pulse-glow-orange 1s infinite;
+    }
+
+    .status-badge[data-status="error"] .status-dot {
+      background-color: var(--color-error);
+      box-shadow: 0 0 8px var(--color-error);
+    }
+
+    /* Grid Layout Container */
+    main {
+      flex: 1;
+      display: grid;
+      grid-template-columns: 320px 1fr 380px;
+      gap: 1.5rem;
+      padding: 1.5rem 2rem;
+      max-width: 1800px;
+      margin: 0 auto;
+      width: 100%;
+    }
+
+    /* Cards - Glassmorphism Glass Panel */
+    .card {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-lg);
+      padding: 1.5rem;
+      backdrop-filter: blur(16px);
+      box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+      display: flex;
+      flex-direction: column;
+      gap: 1.25rem;
+      transition: border-color var(--transition-normal);
+    }
+
+    .card:hover {
+      border-color: rgba(0, 245, 255, 0.15);
+    }
+
+    .card-title {
+      font-size: 1.05rem;
+      font-weight: 600;
+      color: var(--text-primary);
+      letter-spacing: -0.01em;
+      border-left: 3px solid var(--accent-cyan);
+      padding-left: 0.65rem;
+      line-height: 1.2;
+    }
+
+    /* Section Forms & Inputs */
+    .control-group {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+
+    .control-label {
+      font-size: 0.8rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-secondary);
+    }
+
+    /* Button Group Gauge Selector */
+    .gauge-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 0.5rem;
+    }
+
+    .btn-gauge {
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-md);
+      padding: 0.75rem 0.5rem;
+      color: var(--text-primary);
+      cursor: pointer;
+      text-align: center;
+      transition: all var(--transition-fast);
+      display: flex;
+      flex-direction: column;
+      gap: 0.2rem;
+    }
+
+    .btn-gauge:hover {
+      background: rgba(255, 255, 255, 0.08);
+      border-color: rgba(255, 255, 255, 0.2);
+    }
+
+    .btn-gauge.active {
+      background: rgba(0, 245, 255, 0.08);
+      border-color: var(--accent-cyan);
+      box-shadow: 0 0 12px rgba(0, 245, 255, 0.15);
+    }
+
+    .btn-gauge .gauge-val {
+      font-weight: 700;
+      font-size: 1.1rem;
+      letter-spacing: -0.01em;
+    }
+
+    .btn-gauge .gauge-note {
+      font-size: 0.75rem;
+      color: var(--text-secondary);
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    .btn-gauge.active .gauge-note {
+      color: var(--accent-cyan);
+    }
+
+    /* Primary Action Buttons */
+    .btn {
+      background: var(--bg-surface-hover);
+      border: 1px solid var(--border-color);
+      color: var(--text-primary);
+      padding: 0.85rem 1.25rem;
+      border-radius: var(--radius-md);
+      font-weight: 600;
+      font-size: 0.95rem;
+      cursor: pointer;
+      transition: all var(--transition-fast);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+      user-select: none;
+    }
+
+    .btn:hover:not(:disabled) {
+      background: var(--text-primary);
+      color: var(--bg-base);
+      border-color: var(--text-primary);
+    }
+
+    .btn:active:not(:disabled) {
+      transform: scale(0.98);
+    }
+
+    .btn:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+
+    .btn-primary {
+      background: var(--accent-cyan);
+      border-color: var(--accent-cyan);
+      color: var(--bg-base);
+    }
+
+    .btn-primary:hover:not(:disabled) {
+      background: #00d6de;
+      border-color: #00d6de;
+      box-shadow: 0 0 16px rgba(0, 245, 255, 0.3);
+      color: var(--bg-base);
+    }
+
+    .btn-accent {
+      background: var(--accent-orange);
+      border-color: var(--accent-orange);
+      color: white;
+    }
+
+    .btn-accent:hover:not(:disabled) {
+      background: #e0531e;
+      border-color: #e0531e;
+      box-shadow: 0 0 16px rgba(255, 107, 53, 0.3);
+    }
+
+    /* Range Slider Customize */
+    .slider-container {
+      display: flex;
+      flex-direction: column;
+      gap: 0.4rem;
+    }
+
+    .slider-header {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.8rem;
+      color: var(--text-secondary);
+    }
+
+    .slider-val {
+      font-family: 'JetBrains Mono', monospace;
+      color: var(--accent-cyan);
+      font-weight: 600;
+    }
+
+    input[type="range"] {
+      -webkit-appearance: none;
+      width: 100%;
+      height: 6px;
+      background: rgba(255, 255, 255, 0.08);
+      border-radius: 9999px;
+      outline: none;
+      accent-color: var(--accent-cyan);
+    }
+
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: var(--accent-cyan);
+      cursor: pointer;
+      transition: transform var(--transition-fast);
+      box-shadow: 0 0 8px var(--accent-cyan-glow);
+    }
+
+    input[type="range"]::-webkit-slider-thumb:hover {
+      transform: scale(1.2);
+    }
+
+    /* Central Analyzer Panel */
+    .analyzer-column {
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
+    }
+
+    .display-box {
+      background: linear-gradient(135deg, rgba(19, 26, 40, 0.85) 0%, rgba(10, 15, 25, 0.95) 100%);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-lg);
+      padding: 1.75rem;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .display-box::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 2px;
+      background: linear-gradient(90deg, transparent, var(--accent-cyan), transparent);
+    }
+
+    .freq-readout {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 4rem;
+      font-weight: 700;
+      color: var(--accent-cyan);
+      text-shadow: 0 0 24px var(--accent-cyan-glow);
+      line-height: 1;
+      margin-bottom: 0.5rem;
+      letter-spacing: -0.03em;
+    }
+
+    .freq-unit {
+      font-size: 1.5rem;
+      font-weight: 400;
+      color: var(--text-secondary);
+      margin-left: 0.25rem;
+    }
+
+    .freq-diff {
+      font-size: 0.95rem;
+      font-family: 'JetBrains Mono', monospace;
+      color: var(--text-secondary);
+      display: flex;
+      gap: 0.5rem;
+    }
+
+    .freq-diff.out-of-bounds {
+      color: var(--accent-orange);
+    }
+
+    .freq-diff.in-bounds {
+      color: var(--color-success);
+    }
+
+    /* Confidence Meter */
+    .confidence-container {
+      width: 100%;
+      margin-top: 1rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+    }
+
+    .confidence-label {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.75rem;
+      color: var(--text-secondary);
+    }
+
+    .confidence-bar-bg {
+      height: 6px;
+      background: rgba(255, 255, 255, 0.05);
+      border-radius: 9999px;
+      overflow: hidden;
+    }
+
+    .confidence-bar-fill {
+      height: 100%;
+      width: 0%;
+      background: var(--text-muted);
+      border-radius: 9999px;
+      transition: width var(--transition-fast), background-color var(--transition-normal);
+    }
+
+    /* Canvas Drawing Area */
+    .canvas-container {
+      flex: 1;
+      min-height: 380px;
+      position: relative;
+      background: #06090f;
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+      display: flex;
+    }
+
+    canvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    .visualizer-overlay {
+      position: absolute;
+      top: 0.75rem;
+      right: 0.75rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+      background: rgba(8, 12, 20, 0.8);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-sm);
+      padding: 0.5rem;
+      pointer-events: none;
+      font-size: 0.7rem;
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    .overlay-item {
+      display: flex;
+      justify-content: space-between;
+      gap: 1.5rem;
+    }
+
+    .overlay-val {
+      color: var(--accent-cyan);
+    }
+
+    /* Right Stats Column Table styling */
+    .stats-summary {
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-md);
+      padding: 1rem;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1rem;
+      text-align: center;
+    }
+
+    .stat-card-val {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 1.35rem;
+      font-weight: 700;
+      color: var(--text-primary);
+    }
+
+    .stat-card-lbl {
+      font-size: 0.75rem;
+      color: var(--text-secondary);
+      margin-top: 0.15rem;
+    }
+
+    .table-container {
+      flex: 1;
+      overflow-y: auto;
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-md);
+      background: rgba(0, 0, 0, 0.15);
+      position: relative;
+      min-height: 200px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.85rem;
+      text-align: left;
+    }
+
+    th {
+      background: var(--bg-surface-solid);
+      color: var(--text-secondary);
+      font-weight: 600;
+      text-transform: uppercase;
+      font-size: 0.7rem;
+      letter-spacing: 0.05em;
+      padding: 0.75rem 1rem;
+      border-bottom: 1px solid var(--border-color);
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+
+    td {
+      padding: 0.75rem 1rem;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+      vertical-align: middle;
+    }
+
+    tr:hover td {
+      background: rgba(255, 255, 255, 0.01);
+    }
+
+    .row-trial {
+      font-weight: 500;
+    }
+
+    .row-freq {
+      font-family: 'JetBrains Mono', monospace;
+      color: var(--accent-cyan);
+    }
+
+    .row-sd {
+      font-family: 'JetBrains Mono', monospace;
+      color: var(--text-secondary);
+    }
+
+    .btn-action-sm {
+      background: transparent;
+      border: 1px solid rgba(255, 107, 53, 0.3);
+      color: var(--accent-orange);
+      padding: 0.25rem 0.5rem;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      font-size: 0.75rem;
+      transition: all var(--transition-fast);
+      line-height: 1;
+    }
+
+    .btn-action-sm:hover {
+      background: var(--accent-orange);
+      color: white;
+    }
+
+    .empty-state {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      color: var(--text-muted);
+      padding: 3rem 1.5rem;
+      gap: 0.5rem;
+      height: 100%;
+    }
+
+    /* Auto-sequence Visual HUD overlay */
+    .sequence-hud {
+      background: rgba(255, 107, 53, 0.05);
+      border: 1px dashed var(--accent-orange);
+      border-radius: var(--radius-md);
+      padding: 1rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+      animation: pulse-border 2s infinite alternate;
+    }
+
+    .hud-title {
+      font-size: 0.85rem;
+      font-weight: 700;
+      color: var(--accent-orange);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .hud-progress {
+      height: 4px;
+      background: rgba(255, 255, 255, 0.08);
+      border-radius: 9999px;
+      overflow: hidden;
+    }
+
+    .hud-progress-fill {
+      height: 100%;
+      background: var(--accent-orange);
+      width: 0%;
+      transition: width 0.1s linear;
+    }
+
+    /* Settings Dialog / Config Panel */
+    .modal-backdrop {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.85);
+      backdrop-filter: blur(8px);
+      z-index: 1000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity var(--transition-normal);
+    }
+
+    .modal-backdrop.active {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .modal {
+      background: var(--bg-surface-solid);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-lg);
+      width: 100%;
+      max-width: 500px;
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+      transform: scale(0.95);
+      transition: transform var(--transition-normal);
+      display: flex;
+      flex-direction: column;
+      max-height: 85vh;
+    }
+
+    .modal-backdrop.active .modal {
+      transform: scale(1);
+    }
+
+    .modal-header {
+      padding: 1.25rem 1.5rem;
+      border-bottom: 1px solid var(--border-color);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .modal-title {
+      font-weight: 600;
+      font-size: 1.1rem;
+    }
+
+    .btn-close {
+      background: transparent;
+      border: none;
+      color: var(--text-secondary);
+      font-size: 1.5rem;
+      cursor: pointer;
+      line-height: 1;
+    }
+
+    .modal-body {
+      padding: 1.5rem;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 1.25rem;
+    }
+
+    .modal-footer {
+      padding: 1.25rem 1.5rem;
+      border-top: 1px solid var(--border-color);
+      display: flex;
+      justify-content: flex-end;
+      gap: 0.75rem;
+    }
+
+    .config-grid {
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+
+    .config-row {
+      display: grid;
+      grid-template-columns: 80px 1fr 1fr;
+      gap: 0.5rem;
+      align-items: center;
+    }
+
+    .config-input {
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-sm);
+      padding: 0.5rem;
+      color: var(--text-primary);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.85rem;
+      width: 100%;
+    }
+
+    .config-input:focus {
+      border-color: var(--accent-cyan);
+      outline: none;
+    }
+
+    /* Keyframes Animations */
+    @keyframes pulse-glow {
+      0% {
+        box-shadow: 0 0 4px var(--accent-cyan-glow);
+      }
+      50% {
+        box-shadow: 0 0 16px var(--accent-cyan-glow);
+      }
+      100% {
+        box-shadow: 0 0 4px var(--accent-cyan-glow);
+      }
+    }
+
+    @keyframes pulse-glow-orange {
+      0% {
+        box-shadow: 0 0 4px var(--accent-orange-glow);
+      }
+      50% {
+        box-shadow: 0 0 16px var(--accent-orange-glow);
+      }
+      100% {
+        box-shadow: 0 0 4px var(--accent-orange-glow);
+      }
+    }
+
+    @keyframes pulse-border {
+      from {
+        border-color: rgba(255, 107, 53, 0.3);
+      }
+      to {
+        border-color: rgba(255, 107, 53, 0.8);
+      }
+    }
+
+    /* Responsive adjustments */
+    @media (max-width: 1200px) {
+      main {
+        grid-template-columns: 1fr 1fr;
+        padding: 1rem;
+        gap: 1rem;
+      }
+
+      .canvas-container {
+        min-height: 300px;
+      }
+
+      /* Controls span full width on tablet, spectrum and log side by side */
+      section[aria-label="Control Panel"] {
+        grid-column: 1 / -1;
+      }
+    }
+
+    @media (max-width: 768px) {
+      main {
+        grid-template-columns: 1fr;
+        padding: 0.75rem;
+        gap: 0.75rem;
+      }
+
+      header {
+        padding: 1rem;
+        flex-direction: column;
+        gap: 0.75rem;
+        text-align: center;
+      }
+
+      .freq-readout {
+        font-size: 2.5rem;
+      }
+
+      .canvas-container {
+        min-height: 250px;
+      }
+
+      .gauge-grid {
+        grid-template-columns: repeat(3, 1fr);
+      }
+
+      .stats-summary {
+        grid-template-columns: repeat(3, 1fr);
+        gap: 0.5rem;
+      }
+
+      .stat-card-val {
+        font-size: 1.1rem;
+      }
+    }
+
+    /* Touch-friendly tap targets */
+    .btn,
+    .btn-gauge,
+    .btn-action-sm {
+      min-height: 44px;
+    }
+
+    .btn-action-sm {
+      min-width: 44px;
+      padding: 0.4rem 0.6rem;
+    }
+
+    input[type="range"] {
+      height: 44px;
+    }
+
+    input[type="range"]::-webkit-slider-thumb {
+      width: 22px;
+      height: 22px;
+    }
+
+    /* Staggered fade-in for trial log rows */
+    @keyframes fadeSlideIn {
+      from {
+        opacity: 0;
+        transform: translateY(8px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .trial-row-animate {
+      animation: fadeSlideIn 0.3s ease forwards;
+      opacity: 0;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Application Header -->
+  <header>
+    <div class="header-title-container">
+      <h1>Custom FFT Frequency Analyzer</h1>
+      <p>Precision Standing Wave Analysis for IB HL Physics IA (Tension & Mass Density Investigation)</p>
+    </div>
+    <div class="status-badge" id="appStatusBadge" data-status="offline">
+      <div class="status-dot"></div>
+      <span id="appStatusText">System Offline</span>
+    </div>
+  </header>
+
+  <!-- Main Grid Layout -->
+  <main>
+
+    <!-- Column 1: Controls & Parameters -->
+    <section class="card" aria-label="Control Panel">
+      <h2 class="card-title">Acoustic Inputs</h2>
+      
+      <div class="control-group">
+        <button class="btn btn-primary" id="btnToggleMic">
+          <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+            <path d="M19 10v1a7 7 0 0 1-14 0v-1M12 19v4M8 23h8"/>
+          </svg>
+          Initialize Microphone
+        </button>
+      </div>
+
+      <div class="control-group">
+        <label class="control-label">Select Target Gauge</label>
+        <div class="gauge-grid" id="gaugeSelectorGrid">
+          <!-- Populated by JS -->
+        </div>
+      </div>
+
+      <div class="control-group">
+        <div class="slider-container">
+          <div class="slider-header">
+            <span>Pluck Onset Threshold (RMS)</span>
+            <span class="slider-val" id="valThreshold">0.02</span>
+          </div>
+          <input type="range" id="inputThreshold" min="0.005" max="0.1" step="0.005" value="0.02" aria-label="Pluck Onset Threshold">
+        </div>
+      </div>
+
+      <div class="control-group">
+        <div class="slider-container">
+          <div class="slider-header">
+            <span>Min Analysis Confidence</span>
+            <span class="slider-val" id="valMinConfidence">65%</span>
+          </div>
+          <input type="range" id="inputMinConfidence" min="40" max="90" step="5" value="65" aria-label="Minimum Analysis Confidence">
+        </div>
+      </div>
+
+      <hr style="border: none; border-top: 1px solid var(--border-color);">
+
+      <h2 class="card-title">Trial Automation</h2>
+      
+      <div class="control-group" id="automationControls">
+        <button class="btn btn-accent" id="btnStartSequence" disabled>
+          <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path d="M5 3l14 9-14 9V3z"/>
+          </svg>
+          Run 5-Trial Sequence
+        </button>
+        <button class="btn" id="btnCancelSequence" style="display: none;">
+          Cancel Sequence
+        </button>
+      </div>
+
+      <!-- Active sequence hud overlay -->
+      <div class="sequence-hud" id="sequenceHud" style="display: none;">
+        <div class="hud-title">
+          <span id="hudStateText">Waiting for pluck...</span>
+          <span id="hudCountText">Trial 1/5</span>
+        </div>
+        <div class="hud-progress">
+          <div class="hud-progress-fill" id="hudProgressFill"></div>
+        </div>
+      </div>
+
+      <button class="btn" id="btnEditTargets" style="margin-top: auto;">
+        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path d="M12 20h9M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
+        </svg>
+        Edit Expected Frequencies
+      </button>
+    </section>
+
+    <!-- Column 2: Live Analysis & Visualization -->
+    <section class="analyzer-column">
+      
+      <!-- Primary Monospace display -->
+      <div class="display-box">
+        <div class="freq-readout">
+          <span id="txtFrequency">0.0</span><span class="freq-unit">Hz</span>
+        </div>
+        <div class="freq-diff" id="txtDiff">
+          Diff: 0.00 Hz (0.00%)
+        </div>
+        
+        <div class="confidence-container">
+          <div class="confidence-label">
+            <span>Harmonic Correlation Confidence</span>
+            <span id="txtConfidence">0%</span>
+          </div>
+          <div class="confidence-bar-bg">
+            <div class="confidence-bar-fill" id="confidenceBarFill"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Visualizer canvas element -->
+      <div class="canvas-container">
+        <canvas id="visualizerCanvas"></canvas>
+        <div class="visualizer-overlay">
+          <div class="overlay-item">
+            <span>Coarse (HPS):</span>
+            <span class="overlay-val" id="overlayCoarse">0.0 Hz</span>
+          </div>
+          <div class="overlay-item">
+            <span>Refined (AC):</span>
+            <span class="overlay-val" id="overlayRefined">0.0 Hz</span>
+          </div>
+          <div class="overlay-item">
+            <span>RMS Level:</span>
+            <span class="overlay-val" id="overlayRms">0.0000</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Column 3: Data Logging & Statistical Computation -->
+    <section class="card" aria-label="Session Log">
+      <h2 class="card-title">Statistical Summary</h2>
+      
+      <div class="stats-summary">
+        <div>
+          <div class="stat-card-val" id="statMean">-</div>
+          <div class="stat-card-lbl">Mean (Hz)</div>
+        </div>
+        <div>
+          <div class="stat-card-val" id="statStdDev">-</div>
+          <div class="stat-card-lbl">Std Dev (Hz)</div>
+        </div>
+        <div>
+          <div class="stat-card-val" id="statRange">-</div>
+          <div class="stat-card-lbl">Range (Hz)</div>
+        </div>
+      </div>
+
+      <div style="display: flex; align-items: center; justify-content: space-between;">
+        <h2 class="card-title">Trial Readings Log</h2>
+        <span class="control-label" id="trialLogCount">0 trials logged</span>
+      </div>
+
+      <div class="table-container">
+        <table id="trialTable">
+          <thead>
+            <tr>
+              <th>Trial</th>
+              <th>Mean Freq (Hz)</th>
+              <th>Std Dev</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="trialTableBody">
+            <!-- Populated by JS -->
+          </tbody>
+        </table>
+        <div class="empty-state" id="trialLogEmptyState">
+          <svg width="32" height="32" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+            <path d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5.586a1 1 0 0 1 .707.293l5.414 5.414a1 1 0 0 1 .293.707V19a2 2 0 0 1-2 2z"/>
+          </svg>
+          <p>No trials recorded for this gauge yet</p>
+          <p style="font-size: 0.75rem;">Run a 5-Trial sequence or pluck strings with the microphone active to populate the log.</p>
+        </div>
+      </div>
+
+      <div style="display: flex; gap: 0.75rem;">
+        <button class="btn btn-primary" id="btnExportCSV" style="flex: 1;" disabled>
+          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path d="M4 16v1a3 3 0 0 0 3 3h10a3 3 0 0 0 3-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+          </svg>
+          Export CSV Data
+        </button>
+        <button class="btn" id="btnClearData" disabled>
+          Clear All
+        </button>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Edit Targets Modal Backdrop -->
+  <div class="modal-backdrop" id="editTargetsModal">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 class="modal-title">Configure Target Frequencies</h3>
+        <button class="btn-close" id="btnCloseModal">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p style="font-size: 0.85rem; color: var(--text-secondary);">
+          Modify expected fundamental frequencies ($f_0$) and linear densities ($\mu$) to align with your specific experimental string configurations.
+        </p>
+        <div class="config-grid" id="modalConfigGrid">
+          <!-- Populated by JS -->
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn" id="btnResetModal">Reset Defaults</button>
+        <button class="btn btn-primary" id="btnSaveModal">Save Changes</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    /* ----------------------------------------------------
+       Default Experimental Configurations
+       ---------------------------------------------------- */
+    const DEFAULT_GAUGES = [
+      { id: "e4", label: ".009", note: "E4", expected: 329.63, density: 0.000381 },
+      { id: "b3", label: ".011", note: "B3", expected: 246.94, density: 0.000567 },
+      { id: "g3", label: ".016", note: "G3", expected: 196.00, density: 0.001210 },
+      { id: "d3", label: ".024w", note: "D3", expected: 146.83, density: 0.002230 },
+      { id: "a2", label: ".032", note: "A2", expected: 110.00, density: 0.003920 },
+      { id: "e2", label: ".042", note: "E2", expected: 82.41,  density: 0.006740 }
+    ];
+
+    let GAUGES = JSON.parse(localStorage.getItem("phys_ia_gauges")) || [...DEFAULT_GAUGES];
+    let selectedGaugeId = localStorage.getItem("phys_ia_selected_gauge") || "e4";
+
+    /* ----------------------------------------------------
+       Audio Engine Class
+       ---------------------------------------------------- */
+    class AudioEngine {
+      constructor() {
+        this.audioContext = null;
+        this.stream = null;
+        this.sourceNode = null;
+        this.analyserNode = null;
+        this.isRunning = false;
+        
+        this.fftSize = 32768;
+        this.timeBufferSize = 2048; // perfect size for autocorrelation > 50Hz
+        
+        this.timeBuffer = new Float32Array(this.timeBufferSize);
+        this.freqBuffer = new Float32Array(this.fftSize / 2);
+      }
+
+      async start() {
+        if (this.isRunning) return;
+        
+        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+        this.audioContext = new AudioContextClass();
+
+        // Standard rules: disable noise suppression & auto gain control for raw spectrum
+        this.stream = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            echoCancellation: false,
+            noiseSuppression: false,
+            autoGainControl: false
+          }
+        });
+
+        this.sourceNode = this.audioContext.createMediaStreamSource(this.stream);
+        this.analyserNode = this.audioContext.createAnalyser();
+        this.analyserNode.fftSize = this.fftSize;
+        this.analyserNode.smoothingTimeConstant = 0.0; // zero smoothing for instant readings
+
+        this.sourceNode.connect(this.analyserNode);
+        this.isRunning = true;
+      }
+
+      stop() {
+        if (!this.isRunning) return;
+        
+        if (this.stream) {
+          this.stream.getTracks().forEach(track => track.stop());
+        }
+        if (this.audioContext) {
+          this.audioContext.close();
+        }
+        
+        this.isRunning = false;
+        this.stream = null;
+        this.sourceNode = null;
+        this.analyserNode = null;
+      }
+
+      getRMS() {
+        if (!this.isRunning) return 0;
+        this.analyserNode.getFloatTimeDomainData(this.timeBuffer);
+        let sum = 0;
+        for (let i = 0; i < this.timeBufferSize; i++) {
+          sum += this.timeBuffer[i] * this.timeBuffer[i];
+        }
+        return Math.sqrt(sum / this.timeBufferSize);
+      }
+
+      detectPitch(expectedFreq) {
+        if (!this.isRunning) return { frequency: 0, confidence: 0, coarse: 0, refined: 0 };
+
+        this.analyserNode.getFloatFrequencyData(this.freqBuffer);
+        this.analyserNode.getFloatTimeDomainData(this.timeBuffer);
+
+        const sampleRate = this.audioContext.sampleRate;
+        const df = sampleRate / this.fftSize;
+
+        // Stage 1: Coarse Detection with Harmonic Product Spectrum (HPS)
+        // Restrict fundamental frequency search range from 50 to 500 Hz
+        const minBin = Math.floor(50 / df);
+        const maxBin = Math.ceil(500 / df);
+        const hpsHarmonics = 3;
+
+        // Copy and convert active bin region to linear amplitude
+        const neededBins = maxBin * hpsHarmonics + 10;
+        const amps = new Float32Array(neededBins);
+        for (let i = 0; i < neededBins; i++) {
+          if (i < this.freqBuffer.length) {
+            const db = this.freqBuffer[i];
+            amps[i] = db < -100 ? 0 : Math.pow(10, db / 20);
+          }
+        }
+
+        let maxHpsVal = -1;
+        let coarseBin = -1;
+
+        for (let i = minBin; i <= maxBin; i++) {
+          let product = amps[i];
+          for (let h = 2; h <= hpsHarmonics; h++) {
+            product *= amps[i * h];
+          }
+          if (product > maxHpsVal) {
+            maxHpsVal = product;
+            coarseBin = i;
+          }
+        }
+
+        const coarseFreq = coarseBin * df;
+
+        // Guard: if HPS found no peak, return low-confidence result
+        if (coarseBin < 0) {
+          return { frequency: 0, confidence: 0, coarse: 0, refined: 0 };
+        }
+
+        // Stage 2: Time-Domain Windowed Autocorrelation around Coarse peak
+        // Narrow down search to +/- 15% of the HPS coarse frequency
+        const periodSamples = sampleRate / coarseFreq;
+        const searchRange = 0.15;
+        const lagMin = Math.max(1, Math.round(periodSamples * (1 - searchRange)));
+        const lagMax = Math.min(this.timeBufferSize / 2, Math.round(periodSamples * (1 + searchRange)));
+
+        let bestLag = -1;
+        let maxCorrelation = -1.0;
+        const correlations = {};
+
+        // Run correlation
+        for (let lag = lagMin; lag <= lagMax; lag++) {
+          let dotProduct = 0;
+          let sumSqX = 0;
+          let sumSqY = 0;
+          
+          for (let t = 0; t < this.timeBufferSize - lag; t++) {
+            const x = this.timeBuffer[t];
+            const y = this.timeBuffer[t + lag];
+            dotProduct += x * y;
+            sumSqX += x * x;
+            sumSqY += y * y;
+          }
+
+          const denom = Math.sqrt(sumSqX * sumSqY);
+          const correlation = denom > 1e-6 ? dotProduct / denom : 0;
+          correlations[lag] = correlation;
+
+          if (correlation > maxCorrelation) {
+            maxCorrelation = correlation;
+            bestLag = lag;
+          }
+        }
+
+        let refinedFreq = coarseFreq;
+        let confidence = maxCorrelation;
+
+        // Parabolic Interpolation for sub-sample precision
+        if (bestLag > lagMin && bestLag < lagMax) {
+          const y1 = correlations[bestLag - 1];
+          const y2 = correlations[bestLag];
+          const y3 = correlations[bestLag + 1];
+          const denom = 2 * (y1 - 2 * y2 + y3);
+          
+          if (Math.abs(denom) > 1e-6) {
+            const d = (y1 - y3) / denom;
+            const refinedLag = bestLag + d;
+            refinedFreq = sampleRate / refinedLag;
+          } else {
+            refinedFreq = sampleRate / bestLag;
+          }
+        }
+
+        // Return results (confidence of correlation indicates period clean-ness)
+        return {
+          frequency: refinedFreq,
+          confidence: confidence,
+          coarse: coarseFreq,
+          refined: refinedFreq
+        };
+      }
+    }
+
+    /* ----------------------------------------------------
+       Data Storage & Stats Engine
+       ---------------------------------------------------- */
+    class DataStore {
+      constructor() {
+        this.sessionData = JSON.parse(localStorage.getItem("phys_ia_session")) || {};
+      }
+
+      getGaugeData(gaugeId) {
+        if (!this.sessionData[gaugeId]) {
+          this.sessionData[gaugeId] = [];
+        }
+        return this.sessionData[gaugeId];
+      }
+
+      addTrial(gaugeId, frequencyReadings) {
+        const gaugeData = this.getGaugeData(gaugeId);
+        const trialNum = gaugeData.length + 1;
+        
+        // Calculate statistics for this trial
+        const stats = this.computeArrayStats(frequencyReadings);
+        
+        const newTrial = {
+          trialNum,
+          timestamp: new Date().toISOString(),
+          readings: frequencyReadings, // raw samples array
+          mean: stats.mean,
+          stdDev: stats.stdDev,
+          min: stats.min,
+          max: stats.max,
+          range: stats.range
+        };
+
+        gaugeData.push(newTrial);
+        this.save();
+        return newTrial;
+      }
+
+      deleteTrial(gaugeId, index) {
+        const gaugeData = this.getGaugeData(gaugeId);
+        if (gaugeData[index]) {
+          gaugeData.splice(index, 1);
+          // Re-index trial numbers
+          gaugeData.forEach((trial, i) => {
+            trial.trialNum = i + 1;
+          });
+          this.save();
+        }
+      }
+
+      clearGauge(gaugeId) {
+        this.sessionData[gaugeId] = [];
+        this.save();
+      }
+
+      clearAll() {
+        this.sessionData = {};
+        this.save();
+      }
+
+      save() {
+        localStorage.setItem("phys_ia_session", JSON.stringify(this.sessionData));
+      }
+
+      computeArrayStats(arr) {
+        if (arr.length === 0) return { mean: 0, stdDev: 0, min: 0, max: 0, range: 0 };
+        
+        let sum = 0;
+        let min = Infinity;
+        let max = -Infinity;
+        
+        for (let x of arr) {
+          sum += x;
+          if (x < min) min = x;
+          if (x > max) max = x;
+        }
+        
+        const mean = sum / arr.length;
+        
+        let sumSqDiff = 0;
+        for (let x of arr) {
+          sumSqDiff += (x - mean) * (x - mean);
+        }
+        
+        // Sample standard deviation (Bessel's correction n-1)
+        const stdDev = arr.length > 1 ? Math.sqrt(sumSqDiff / (arr.length - 1)) : 0;
+        
+        return {
+          mean: mean,
+          stdDev: stdDev,
+          min: min,
+          max: max,
+          range: max - min
+        };
+      }
+
+      // Compute stats pooled across all trials of a gauge
+      computePooledStats(gaugeId) {
+        const trials = this.getGaugeData(gaugeId);
+        if (trials.length === 0) return { mean: null, stdDev: null, range: null };
+
+        // Flatten all readings
+        const allReadings = [];
+        trials.forEach(t => allReadings.push(...t.readings));
+        
+        return this.computeArrayStats(allReadings);
+      }
+    }
+
+    /* ----------------------------------------------------
+       App Controller & UI Orchestration
+       ---------------------------------------------------- */
+    const audioEngine = new AudioEngine();
+    const dataStore = new DataStore();
+    
+    // Application States
+    let activeTrialReadings = [];
+    let state = "idle"; // "idle", "auto-trial-waiting", "auto-trial-recording", "auto-trial-countdown"
+    let trialIndex = 0; // 0 to 4
+    let countdownSecs = 0;
+    let sequenceTimer = null;
+    let recordingTimer = null;
+    
+    // DOM Nodes
+    const btnToggleMic = document.getElementById("btnToggleMic");
+    const appStatusBadge = document.getElementById("appStatusBadge");
+    const appStatusText = document.getElementById("appStatusText");
+    const gaugeSelectorGrid = document.getElementById("gaugeSelectorGrid");
+    
+    const valThreshold = document.getElementById("valThreshold");
+    const inputThreshold = document.getElementById("inputThreshold");
+    const valMinConfidence = document.getElementById("valMinConfidence");
+    const inputMinConfidence = document.getElementById("inputMinConfidence");
+    
+    const btnStartSequence = document.getElementById("btnStartSequence");
+    const btnCancelSequence = document.getElementById("btnCancelSequence");
+    const sequenceHud = document.getElementById("sequenceHud");
+    const hudStateText = document.getElementById("hudStateText");
+    const hudCountText = document.getElementById("hudCountText");
+    const hudProgressFill = document.getElementById("hudProgressFill");
+    
+    const txtFrequency = document.getElementById("txtFrequency");
+    const txtDiff = document.getElementById("txtDiff");
+    const txtConfidence = document.getElementById("txtConfidence");
+    const confidenceBarFill = document.getElementById("confidenceBarFill");
+    
+    const overlayCoarse = document.getElementById("overlayCoarse");
+    const overlayRefined = document.getElementById("overlayRefined");
+    const overlayRms = document.getElementById("overlayRms");
+    
+    const statMean = document.getElementById("statMean");
+    const statStdDev = document.getElementById("statStdDev");
+    const statRange = document.getElementById("statRange");
+    
+    const trialTableBody = document.getElementById("trialTableBody");
+    const trialLogEmptyState = document.getElementById("trialLogEmptyState");
+    const trialLogCount = document.getElementById("trialLogCount");
+    
+    const btnExportCSV = document.getElementById("btnExportCSV");
+    const btnClearData = document.getElementById("btnClearData");
+    
+    const visualizerCanvas = document.getElementById("visualizerCanvas");
+    const canvasCtx = visualizerCanvas.getContext("2d");
+    
+    // Modals
+    const btnEditTargets = document.getElementById("btnEditTargets");
+    const editTargetsModal = document.getElementById("editTargetsModal");
+    const btnCloseModal = document.getElementById("btnCloseModal");
+    const btnSaveModal = document.getElementById("btnSaveModal");
+    const btnResetModal = document.getElementById("btnResetModal");
+    const modalConfigGrid = document.getElementById("modalConfigGrid");
+
+    /* ----------------------------------------------------
+       Initialize Interface
+       ---------------------------------------------------- */
+    function initUI() {
+      // Setup canvas size
+      resizeCanvas();
+      window.addEventListener("resize", resizeCanvas);
+
+      // Setup gauges selector buttons
+      renderGaugesList();
+
+      // Bind config sliders
+      inputThreshold.addEventListener("input", (e) => {
+        valThreshold.textContent = parseFloat(e.target.value).toFixed(3);
+      });
+      inputMinConfidence.addEventListener("input", (e) => {
+        valMinConfidence.textContent = e.target.value + "%";
+      });
+
+      // Bind button events
+      btnToggleMic.addEventListener("click", toggleMicrophone);
+      btnStartSequence.addEventListener("click", startSequence);
+      btnCancelSequence.addEventListener("click", cancelSequence);
+      btnExportCSV.addEventListener("click", exportCSV);
+      btnClearData.addEventListener("click", clearAllData);
+      
+      // Modals
+      btnEditTargets.addEventListener("click", openConfigModal);
+      btnCloseModal.addEventListener("click", closeConfigModal);
+      btnSaveModal.addEventListener("click", saveConfigModal);
+      btnResetModal.addEventListener("click", resetConfigModal);
+
+      // Render trial log
+      updateTrialLogUI();
+      
+      // Canvas rendering loop
+      requestAnimationFrame(renderLoop);
+    }
+
+    function resizeCanvas() {
+      const rect = visualizerCanvas.parentElement.getBoundingClientRect();
+      visualizerCanvas.width = rect.width * window.devicePixelRatio;
+      visualizerCanvas.height = rect.height * window.devicePixelRatio;
+    }
+
+    function renderGaugesList() {
+      gaugeSelectorGrid.innerHTML = "";
+      GAUGES.forEach(gauge => {
+        const btn = document.createElement("button");
+        btn.className = `btn-gauge ${gauge.id === selectedGaugeId ? 'active' : ''}`;
+        btn.setAttribute("aria-pressed", gauge.id === selectedGaugeId ? "true" : "false");
+        btn.innerHTML = `
+          <span class="gauge-val">${gauge.label}</span>
+          <span class="gauge-note">${gauge.note} (${gauge.expected.toFixed(1)} Hz)</span>
+        `;
+        btn.addEventListener("click", () => selectGauge(gauge.id));
+        gaugeSelectorGrid.appendChild(btn);
+      });
+    }
+
+    function selectGauge(gaugeId) {
+      if (state.startsWith("auto-trial")) return; // lock selection during auto sequences
+      
+      selectedGaugeId = gaugeId;
+      localStorage.setItem("phys_ia_selected_gauge", gaugeId);
+      
+      renderGaugesList();
+      updateTrialLogUI();
+    }
+
+    /* ----------------------------------------------------
+       Synthesized Lab Sounds Nodes (Self-Contained)
+       ---------------------------------------------------- */
+    function playTone(freq, type, duration) {
+      if (!audioEngine.audioContext) return;
+      const ctx = audioEngine.audioContext;
+      if (ctx.state === "suspended") return;
+      
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      
+      osc.type = type || 'sine';
+      osc.frequency.setValueAtTime(freq, ctx.currentTime);
+      
+      gain.gain.setValueAtTime(0.08, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
+      
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      
+      osc.start();
+      osc.stop(ctx.currentTime + duration);
+    }
+
+    function playBeepSuccess() {
+      playTone(880, 'sine', 0.12);
+      setTimeout(() => playTone(1320, 'sine', 0.18), 80);
+    }
+
+    function playBeepCountdown() {
+      playTone(440, 'sine', 0.05);
+    }
+
+    function playBeepSequenceComplete() {
+      const now = 0.12;
+      playTone(523.25, 'sine', now); // C5
+      setTimeout(() => playTone(659.25, 'sine', now), 100); // E5
+      setTimeout(() => playTone(783.99, 'sine', now), 200); // G5
+      setTimeout(() => playTone(1046.50, 'sine', 0.35), 300); // C6
+    }
+
+    function playBeepFail() {
+      playTone(220, 'triangle', 0.3);
+    }
+
+    /* ----------------------------------------------------
+       Microphone Access & Engine Loop
+       ---------------------------------------------------- */
+    async function toggleMicrophone() {
+      if (audioEngine.isRunning) {
+        audioEngine.stop();
+        btnToggleMic.innerHTML = `
+          <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+            <path d="M19 10v1a7 7 0 0 1-14 0v-1M12 19v4M8 23h8"/>
+          </svg>
+          Initialize Microphone
+        `;
+        appStatusBadge.setAttribute("data-status", "offline");
+        appStatusText.textContent = "System Offline";
+        btnStartSequence.disabled = true;
+        cancelSequence();
+      } else {
+        try {
+          appStatusText.textContent = "Connecting Mic...";
+          await audioEngine.start();
+          btnToggleMic.innerHTML = `
+            <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path d="M6 18L18 6M6 6l12 12"/>
+            </svg>
+            Deactivate Microphone
+          `;
+          appStatusBadge.setAttribute("data-status", "listening");
+          appStatusText.textContent = "Microphone Active";
+          btnStartSequence.disabled = false;
+          
+          // resume audioContext if browser blocked autoplay
+          if (audioEngine.audioContext.state === "suspended") {
+            await audioEngine.audioContext.resume();
+          }
+        } catch (err) {
+          console.error(err);
+          appStatusBadge.setAttribute("data-status", "error");
+          appStatusText.textContent = "Mic Permission Denied";
+          alert("Microphone connection failed. Please ensure permission is granted to continue.");
+        }
+      }
+    }
+
+    /* ----------------------------------------------------
+       Automation Trial Controller
+       ---------------------------------------------------- */
+    function startSequence() {
+      if (!audioEngine.isRunning) return;
+      
+      state = "auto-trial-waiting";
+      trialIndex = 0;
+      activeTrialReadings = [];
+      
+      btnStartSequence.style.display = "none";
+      btnCancelSequence.style.display = "inline-flex";
+      sequenceHud.style.display = "flex";
+      
+      updateHudUI();
+    }
+
+    function cancelSequence() {
+      state = "idle";
+      
+      if (sequenceTimer) clearTimeout(sequenceTimer);
+      if (recordingTimer) clearTimeout(recordingTimer);
+      
+      btnStartSequence.style.display = "inline-flex";
+      btnCancelSequence.style.display = "none";
+      sequenceHud.style.display = "none";
+      
+      activeTrialReadings = [];
+    }
+
+    function updateHudUI() {
+      if (state === "auto-trial-waiting") {
+        hudStateText.textContent = "Waiting for pluck onset...";
+        hudCountText.textContent = `Trial ${trialIndex + 1}/5`;
+        hudProgressFill.style.width = "0%";
+        appStatusBadge.setAttribute("data-status", "listening");
+        appStatusText.textContent = "Waiting for Pluck...";
+      } else if (state === "auto-trial-recording") {
+        hudStateText.textContent = "Recording sustain...";
+        hudCountText.textContent = `Trial ${trialIndex + 1}/5`;
+        appStatusBadge.setAttribute("data-status", "recording");
+        appStatusText.textContent = "LOGGING TRIAL";
+      } else if (state === "auto-trial-countdown") {
+        hudStateText.textContent = `Pluck in ${countdownSecs}s...`;
+        hudCountText.textContent = `Trial ${trialIndex + 1}/5`;
+        hudProgressFill.style.width = `${((3 - countdownSecs) / 3) * 100}%`;
+        appStatusBadge.setAttribute("data-status", "listening");
+        appStatusText.textContent = "Cooldown rest";
+      }
+    }
+
+    function triggerRecording() {
+      state = "auto-trial-recording";
+      activeTrialReadings = [];
+      updateHudUI();
+      
+      const recordDuration = 3000; // 3 seconds sustain record
+      const sampleInterval = 40;   // collect pitch reading every 40ms (~75 readings)
+      const startTime = Date.now();
+      
+      const recordInterval = setInterval(() => {
+        if (state !== "auto-trial-recording") {
+          clearInterval(recordInterval);
+          return;
+        }
+
+        const elapsed = Date.now() - startTime;
+        const progress = Math.min(100, (elapsed / recordDuration) * 100);
+        hudProgressFill.style.width = `${progress}%`;
+
+        // Capture pitch
+        const activeGauge = GAUGES.find(g => g.id === selectedGaugeId);
+        const pitch = audioEngine.detectPitch(activeGauge.expected);
+        const minConf = parseFloat(inputMinConfidence.value) / 100;
+        
+        // Filter: Reading must exceed confidence and be within expected fundamental range +/- 25%
+        if (pitch.confidence >= minConf && pitch.frequency > 0) {
+          const lowerBound = activeGauge.expected * 0.75;
+          const upperBound = activeGauge.expected * 1.25;
+          if (pitch.frequency >= lowerBound && pitch.frequency <= upperBound) {
+            activeTrialReadings.push(pitch.frequency);
+          }
+        }
+      }, sampleInterval);
+
+      recordingTimer = setTimeout(() => {
+        clearInterval(recordInterval);
+        if (state !== "auto-trial-recording") return;
+
+        // Process recorded sequence
+        if (activeTrialReadings.length >= 20) { // minimum 20 valid readings
+          dataStore.addTrial(selectedGaugeId, activeTrialReadings);
+          playBeepSuccess();
+          updateTrialLogUI();
+          
+          trialIndex++;
+          if (trialIndex < 5) {
+            startCountdown();
+          } else {
+            // Sequence complete — check if there's a next gauge to advance to
+            playBeepSequenceComplete();
+            const currentGaugeIdx = GAUGES.findIndex(g => g.id === selectedGaugeId);
+            const nextGauge = GAUGES[currentGaugeIdx + 1];
+
+            if (nextGauge) {
+              const advance = confirm(
+                `5-Trial Sequence for ${GAUGES[currentGaugeIdx].label} ${GAUGES[currentGaugeIdx].note} complete!\n\n` +
+                `Advance to next gauge: ${nextGauge.label} ${nextGauge.note} (${nextGauge.expected.toFixed(1)} Hz)?`
+              );
+              cancelSequence();
+              if (advance) {
+                selectGauge(nextGauge.id);
+                // Auto-start next sequence after a short delay
+                setTimeout(() => {
+                  if (audioEngine.isRunning) startSequence();
+                }, 500);
+              }
+            } else {
+              cancelSequence();
+              alert("All 6 gauge sequences completed! Export your data using the CSV button.");
+            }
+          }
+        } else {
+          // Fail: retry pluck
+          playBeepFail();
+          state = "auto-trial-waiting";
+          updateHudUI();
+          alert("Sustain signal was too weak or noisy. Please pluck again firmly.");
+        }
+      }, recordDuration);
+    }
+
+    function startCountdown() {
+      state = "auto-trial-countdown";
+      countdownSecs = 3;
+      updateHudUI();
+      playBeepCountdown();
+      
+      const tick = () => {
+        countdownSecs--;
+        if (countdownSecs > 0) {
+          updateHudUI();
+          playBeepCountdown();
+          sequenceTimer = setTimeout(tick, 1000);
+        } else {
+          state = "auto-trial-waiting";
+          updateHudUI();
+        }
+      };
+      
+      sequenceTimer = setTimeout(tick, 1000);
+    }
+
+    /* ----------------------------------------------------
+       Trial Logs UI & Statistics Renderer
+       ---------------------------------------------------- */
+    function updateTrialLogUI() {
+      const trials = dataStore.getGaugeData(selectedGaugeId);
+      trialTableBody.innerHTML = "";
+      
+      if (trials.length === 0) {
+        trialLogEmptyState.style.display = "flex";
+        trialLogCount.textContent = "0 trials logged";
+        statMean.textContent = "-";
+        statStdDev.textContent = "-";
+        statRange.textContent = "-";
+        btnExportCSV.disabled = true;
+        btnClearData.disabled = Object.keys(dataStore.sessionData).length === 0;
+        return;
+      }
+      
+      trialLogEmptyState.style.display = "none";
+      trialLogCount.textContent = `${trials.length} trial(s) logged`;
+      
+      trials.forEach((trial, index) => {
+        const tr = document.createElement("tr");
+        tr.className = "trial-row-animate";
+        tr.style.animationDelay = `${index * 0.06}s`;
+        tr.innerHTML = `
+          <td class="row-trial">Trial ${trial.trialNum}</td>
+          <td class="row-freq">${trial.mean.toFixed(2)} Hz</td>
+          <td class="row-sd">±${trial.stdDev.toFixed(2)} Hz</td>
+          <td>
+            <button class="btn-action-sm" onclick="deleteLoggedTrial('${index}')">Delete</button>
+          </td>
+        `;
+        trialTableBody.appendChild(tr);
+      });
+
+      // Update statistical summaries
+      const pooled = dataStore.computePooledStats(selectedGaugeId);
+      statMean.textContent = pooled.mean !== null ? pooled.mean.toFixed(2) : "-";
+      statStdDev.textContent = pooled.stdDev !== null ? pooled.stdDev.toFixed(2) : "-";
+      statRange.textContent = pooled.range !== null ? pooled.range.toFixed(2) : "-";
+      
+      btnExportCSV.disabled = false;
+      btnClearData.disabled = false;
+    }
+
+    // Bind globally for inline onclick execution
+    window.deleteLoggedTrial = function(index) {
+      if (confirm("Are you sure you want to delete this trial reading?")) {
+        dataStore.deleteTrial(selectedGaugeId, parseInt(index));
+        updateTrialLogUI();
+      }
+    };
+
+    function clearAllData() {
+      if (confirm("Permanently wipe ALL gauge trials in this browser? This action is irreversible.")) {
+        dataStore.clearAll();
+        updateTrialLogUI();
+      }
+    }
+
+    /* ----------------------------------------------------
+       Export Data Engine
+       ---------------------------------------------------- */
+    function exportCSV() {
+      // 1. Build Summary Table
+      let csvContent = "data:text/csv;charset=utf-8,";
+      csvContent += "Custom FFT Frequency Analyzer - Physics IA Export\n";
+      csvContent += `Generated,${new Date().toLocaleString()}\n\n`;
+      
+      csvContent += "SUMMARY STATS PER GAUGE\n";
+      csvContent += "Gauge,Note,Expected Fundamental (Hz),Density (kg/m),Num Trials,Mean Freq (Hz),Std Dev (Hz),Range (Hz)\n";
+      
+      GAUGES.forEach(g => {
+        const trials = dataStore.getGaugeData(g.id);
+        const stats = dataStore.computePooledStats(g.id);
+        
+        if (trials.length > 0) {
+          csvContent += `"${g.label}","${g.note}",${g.expected},${g.density},${trials.length},${stats.mean.toFixed(3)},${stats.stdDev.toFixed(3)},${stats.range.toFixed(3)}\n`;
+        } else {
+          csvContent += `"${g.label}","${g.note}",${g.expected},${g.density},0,-,-,-\n`;
+        }
+      });
+      
+      csvContent += "\n\nDETAILED TRIAL READINGS LOG\n";
+      csvContent += "Gauge,Note,Trial Number,Reading Index,Frequency (Hz)\n";
+      
+      GAUGES.forEach(g => {
+        const trials = dataStore.getGaugeData(g.id);
+        trials.forEach(trial => {
+          trial.readings.forEach((val, rIdx) => {
+            csvContent += `"${g.label}","${g.note}",${trial.trialNum},${rIdx + 1},${val.toFixed(4)}\n`;
+          });
+        });
+      });
+
+      const encodedUri = encodeURI(csvContent);
+      const link = document.createElement("a");
+      link.setAttribute("href", encodedUri);
+      link.setAttribute("download", `Physics_IA_FFT_Frequency_Data_${Date.now()}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+
+    /* ----------------------------------------------------
+       Configuration Modal Operations
+       ---------------------------------------------------- */
+    function openConfigModal() {
+      modalConfigGrid.innerHTML = "";
+      GAUGES.forEach((g, idx) => {
+        const labelRow = document.createElement("div");
+        labelRow.className = "config-row";
+        labelRow.innerHTML = `
+          <span style="font-weight:600; font-family:'JetBrains Mono';">${g.note}</span>
+          <input type="number" class="config-input expected-input" data-index="${idx}" step="0.01" value="${g.expected}" placeholder="f0 (Hz)">
+          <input type="number" class="config-input density-input" data-index="${idx}" step="0.000001" value="${g.density}" placeholder="Density">
+        `;
+        modalConfigGrid.appendChild(labelRow);
+      });
+      editTargetsModal.classList.add("active");
+    }
+
+    function closeConfigModal() {
+      editTargetsModal.classList.remove("active");
+    }
+
+    function saveConfigModal() {
+      const expectedInputs = document.querySelectorAll(".expected-input");
+      const densityInputs = document.querySelectorAll(".density-input");
+      
+      expectedInputs.forEach(input => {
+        const idx = parseInt(input.getAttribute("data-index"));
+        const val = parseFloat(input.value);
+        if (!isNaN(val) && val > 0) GAUGES[idx].expected = val;
+      });
+      
+      densityInputs.forEach(input => {
+        const idx = parseInt(input.getAttribute("data-index"));
+        const val = parseFloat(input.value);
+        if (!isNaN(val) && val >= 0) GAUGES[idx].density = val;
+      });
+      
+      localStorage.setItem("phys_ia_gauges", JSON.stringify(GAUGES));
+      renderGaugesList();
+      updateTrialLogUI();
+      closeConfigModal();
+    }
+
+    function resetConfigModal() {
+      if (confirm("Reset gauges expected frequencies and densities back to factory standard calibration?")) {
+        GAUGES = [...DEFAULT_GAUGES];
+        localStorage.removeItem("phys_ia_gauges");
+        renderGaugesList();
+        updateTrialLogUI();
+        closeConfigModal();
+      }
+    }
+
+    /* ----------------------------------------------------
+       Canvas Rendering Loop (60FPS Oscilloscope & Spectrum)
+       ---------------------------------------------------- */
+    function renderLoop() {
+      requestAnimationFrame(renderLoop);
+      
+      // Calculate CSS/DPR pixels
+      const width = visualizerCanvas.width;
+      const height = visualizerCanvas.height;
+      
+      // Clear visualizer background
+      canvasCtx.fillStyle = "#06090f";
+      canvasCtx.fillRect(0, 0, width, height);
+
+      // Render oscilloscope and grid lines if running
+      if (audioEngine.isRunning) {
+        const rms = audioEngine.getRMS();
+        const activeGauge = GAUGES.find(g => g.id === selectedGaugeId);
+        
+        // Trigger Trial Onset Detection
+        const onsetThreshold = parseFloat(inputThreshold.value);
+        if (state === "auto-trial-waiting" && rms >= onsetThreshold) {
+          triggerRecording();
+        }
+
+        // Draw frequency grids
+        drawCanvasGrid(width, height);
+
+        // Capture Pitch
+        const pitch = audioEngine.detectPitch(activeGauge.expected);
+        
+        // Render detailed diagnostics values in HUD panel
+        overlayRms.textContent = rms.toFixed(4);
+        overlayCoarse.textContent = pitch.coarse > 0 ? `${pitch.coarse.toFixed(1)} Hz` : "0.0 Hz";
+        overlayRefined.textContent = pitch.refined > 0 ? `${pitch.refined.toFixed(2)} Hz` : "0.0 Hz";
+        
+        // Filter and display current values
+        const minConf = parseFloat(inputMinConfidence.value) / 100;
+        
+        if (pitch.confidence >= minConf && pitch.frequency > 50 && pitch.frequency < 1000) {
+          txtFrequency.textContent = pitch.frequency.toFixed(2);
+          
+          // Calculate expected error difference
+          const diff = pitch.frequency - activeGauge.expected;
+          const pct = (diff / activeGauge.expected) * 100;
+          txtDiff.textContent = `Diff: ${diff >= 0 ? '+' : ''}${diff.toFixed(2)} Hz (${pct >= 0 ? '+' : ''}${pct.toFixed(2)}%)`;
+          
+          if (Math.abs(pct) > 5) {
+            txtDiff.className = "freq-diff out-of-bounds";
+          } else {
+            txtDiff.className = "freq-diff in-bounds";
+          }
+          
+          txtConfidence.textContent = `${Math.round(pitch.confidence * 100)}%`;
+          confidenceBarFill.style.width = `${pitch.confidence * 100}%`;
+          confidenceBarFill.style.backgroundColor = pitch.confidence >= 0.75 ? "var(--color-success)" : "var(--color-warning)";
+          
+          // Draw peak and harmonics markers
+          drawPitchMarkers(width, height, pitch.frequency, activeGauge.expected);
+        } else {
+          // Clear confidence/diff readouts slowly
+          txtConfidence.textContent = `${Math.round(pitch.confidence * 100)}%`;
+          confidenceBarFill.style.width = `${pitch.confidence * 100}%`;
+          confidenceBarFill.style.backgroundColor = "var(--text-muted)";
+        }
+
+        // Draw FFT Frequency Magnitude graph
+        drawFftSpectrum(width, height, activeGauge.expected);
+
+        // Draw overlay oscilloscope waveform in upper corner
+        drawOscilloscope(width, height);
+      } else {
+        // Empty states visual rendering
+        canvasCtx.fillStyle = "rgba(255, 255, 255, 0.03)";
+        canvasCtx.font = "14px 'Outfit'";
+        canvasCtx.textAlign = "center";
+        canvasCtx.fillText("Acoustic Spectrum Analyzer Offline", width / 2, height / 2);
+        canvasCtx.font = "11px 'JetBrains Mono'";
+        canvasCtx.fillStyle = "var(--text-muted)";
+        canvasCtx.fillText("Click 'Initialize Microphone' to activate live analyzer streams.", width / 2, height / 2 + 20);
+        
+        txtFrequency.textContent = "0.0";
+        txtDiff.textContent = "Diff: 0.00 Hz (0.00%)";
+        txtDiff.className = "freq-diff";
+        txtConfidence.textContent = "0%";
+        confidenceBarFill.style.width = "0%";
+      }
+    }
+
+    function drawCanvasGrid(width, height) {
+      canvasCtx.strokeStyle = "rgba(255, 255, 255, 0.02)";
+      canvasCtx.lineWidth = 1;
+      
+      // Draw standard grids lines
+      const dbSteps = [-20, -40, -60, -80, -100];
+      canvasCtx.fillStyle = "#6b7280";
+      canvasCtx.font = "9px 'JetBrains Mono'";
+      canvasCtx.textAlign = "right";
+      
+      dbSteps.forEach(db => {
+        const y = Math.round((db / -120) * height);
+        canvasCtx.beginPath();
+        canvasCtx.moveTo(0, y);
+        canvasCtx.lineTo(width, y);
+        canvasCtx.stroke();
+        canvasCtx.fillText(`${db} dB`, width - 10, y - 4);
+      });
+    }
+
+    function drawFftSpectrum(width, height, expectedFreq) {
+      const bufferLength = audioEngine.freqBuffer.length;
+      const sampleRate = audioEngine.audioContext.sampleRate;
+      const df = sampleRate / audioEngine.fftSize;
+
+      // We plot frequency spectrum up to 1000 Hz for high visibility of harmonics
+      const maxPlotFreq = 1000;
+      const maxPlotBin = Math.min(bufferLength, Math.ceil(maxPlotFreq / df));
+      
+      // Render expected gauge highlight area
+      const minHighlightFreq = expectedFreq * 0.75;
+      const maxHighlightFreq = expectedFreq * 1.25;
+      const xHighlightStart = (minHighlightFreq / maxPlotFreq) * width;
+      const xHighlightEnd = (maxHighlightFreq / maxPlotFreq) * width;
+
+      canvasCtx.fillStyle = "rgba(0, 245, 255, 0.015)";
+      canvasCtx.fillRect(xHighlightStart, 0, xHighlightEnd - xHighlightStart, height);
+
+      // Begin spectrum path
+      canvasCtx.beginPath();
+      canvasCtx.lineWidth = 1.5;
+      canvasCtx.strokeStyle = "rgba(0, 245, 255, 0.75)";
+
+      for (let i = 0; i < maxPlotBin; i++) {
+        const freq = i * df;
+        const x = (freq / maxPlotFreq) * width;
+        
+        // Scale dB to canvas coordinates: db levels range from -120 to 0
+        const db = audioEngine.freqBuffer[i];
+        const normalizedDb = Math.max(0, Math.min(1, (db + 120) / 120));
+        const y = height - (normalizedDb * height);
+
+        if (i === 0) {
+          canvasCtx.moveTo(x, y);
+        } else {
+          canvasCtx.lineTo(x, y);
+        }
+      }
+      canvasCtx.stroke();
+
+      // Draw horizontal axis labels
+      canvasCtx.fillStyle = "#6b7280";
+      canvasCtx.font = "9px 'JetBrains Mono'";
+      canvasCtx.textAlign = "center";
+      
+      for (let f = 100; f <= maxPlotFreq; f += 100) {
+        const x = (f / maxPlotFreq) * width;
+        canvasCtx.beginPath();
+        canvasCtx.strokeStyle = "rgba(255, 255, 255, 0.05)";
+        canvasCtx.moveTo(x, 0);
+        canvasCtx.lineTo(x, height);
+        canvasCtx.stroke();
+        canvasCtx.fillText(`${f}Hz`, x, height - 8);
+      }
+    }
+
+    function drawPitchMarkers(width, height, detectedFreq, expectedFreq) {
+      const maxPlotFreq = 1000;
+      
+      // Expected frequency target marker
+      const targetX = (expectedFreq / maxPlotFreq) * width;
+      canvasCtx.beginPath();
+      canvasCtx.strokeStyle = "rgba(255, 107, 53, 0.35)";
+      canvasCtx.setLineDash([5, 5]);
+      canvasCtx.lineWidth = 1.5;
+      canvasCtx.moveTo(targetX, 0);
+      canvasCtx.lineTo(targetX, height);
+      canvasCtx.stroke();
+      canvasCtx.setLineDash([]); // Reset
+      
+      // Detected frequency fundamental peak marker
+      const peakX = (detectedFreq / maxPlotFreq) * width;
+      canvasCtx.beginPath();
+      canvasCtx.strokeStyle = "rgba(0, 245, 255, 0.9)";
+      canvasCtx.lineWidth = 2;
+      canvasCtx.moveTo(peakX, 0);
+      canvasCtx.lineTo(peakX, height);
+      canvasCtx.stroke();
+      
+      // Labels peak
+      canvasCtx.fillStyle = "#00f5ff";
+      canvasCtx.font = "bold 10px 'Outfit'";
+      canvasCtx.textAlign = "left";
+      canvasCtx.fillText(` f0: ${detectedFreq.toFixed(1)} Hz`, peakX + 4, 25);
+
+      // Harmonics secondary markers (2f0, 3f0, 4f0)
+      for (let h = 2; h <= 4; h++) {
+        const hFreq = detectedFreq * h;
+        if (hFreq <= maxPlotFreq) {
+          const hX = (hFreq / maxPlotFreq) * width;
+          canvasCtx.beginPath();
+          canvasCtx.strokeStyle = "rgba(0, 245, 255, 0.25)";
+          canvasCtx.lineWidth = 1;
+          canvasCtx.moveTo(hX, 0);
+          canvasCtx.lineTo(hX, height);
+          canvasCtx.stroke();
+          
+          canvasCtx.fillStyle = "rgba(0, 245, 255, 0.4)";
+          canvasCtx.font = "9px 'JetBrains Mono'";
+          canvasCtx.fillText(` ${h}f0`, hX + 2, 45);
+        }
+      }
+    }
+
+    function drawOscilloscope(width, height) {
+      const oscWidth = 140;
+      const oscHeight = 60;
+      const oscX = 15;
+      const oscY = 15;
+
+      // Draw background overlay box
+      canvasCtx.fillStyle = "rgba(8, 12, 20, 0.65)";
+      canvasCtx.strokeStyle = "rgba(255, 255, 255, 0.05)";
+      canvasCtx.lineWidth = 1;
+      canvasCtx.fillRect(oscX, oscY, oscWidth, oscHeight);
+      canvasCtx.strokeRect(oscX, oscY, oscWidth, oscHeight);
+
+      // Draw oscilloscope waveform
+      canvasCtx.beginPath();
+      canvasCtx.strokeStyle = "rgba(0, 245, 255, 0.45)";
+      canvasCtx.lineWidth = 1.25;
+
+      const len = audioEngine.timeBuffer.length;
+      const step = Math.floor(len / oscWidth);
+
+      for (let i = 0; i < oscWidth; i++) {
+        const val = audioEngine.timeBuffer[i * step];
+        const x = oscX + i;
+        // scale buffer amplitude to fit mini window
+        const y = oscY + (oscHeight / 2) + (val * (oscHeight / 2) * 0.9);
+
+        if (i === 0) {
+          canvasCtx.moveTo(x, y);
+        } else {
+          canvasCtx.lineTo(x, y);
+        }
+      }
+      canvasCtx.stroke();
+      
+      canvasCtx.fillStyle = "#9ca3af";
+      canvasCtx.font = "8px 'JetBrains Mono'";
+      canvasCtx.textAlign = "left";
+      canvasCtx.fillText("TIME DOMAIN WAVE", oscX + 4, oscY - 4);
+    }
+
+    // Launch UI binds
+    window.addEventListener("DOMContentLoaded", initUI);
+  </script>
+</body>
+</html>
